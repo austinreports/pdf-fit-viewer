@@ -1,3 +1,4 @@
+
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -129,7 +130,7 @@
       CALLBACK_NAME: "pdfViewerReceivePdf",
       REQUEST_TIMEOUT_MS: 30000,
       MAX_DEVICE_SCALE: 2,
-      MAX_ACCEPTED_PDF_BYTES: 2 * 1024 * 1024
+      MAX_ACCEPTED_PDF_BYTES: 20 * 1024 * 1024
     });
 
     pdfjsLib.GlobalWorkerOptions.workerSrc =
@@ -262,18 +263,30 @@
             return;
           }
 
-          if (typeof response.base64 !== "string" || !response.base64) {
+          if (
+            typeof response.base64 !== "string" ||
+            !response.base64
+          ) {
             finish(reject, new Error("PDF data is missing from the response."));
             return;
           }
 
           if (
-            !Number.isFinite(response.size) ||
+            !Number.isSafeInteger(response.size) ||
             response.size < 1 ||
             response.size > CONFIG.MAX_ACCEPTED_PDF_BYTES
           ) {
             finish(reject, new Error(
-              "The PDF is empty or exceeds the current 2 MB viewer limit."
+              "The PDF is empty or exceeds the current 20 MB viewer limit."
+            ));
+            return;
+          }
+
+          const expectedBase64Length = Math.ceil(response.size / 3) * 4;
+
+          if (response.base64.length !== expectedBase64Length) {
+            finish(reject, new Error(
+              "The PDF data appears incomplete or invalid."
             ));
             return;
           }
@@ -500,6 +513,12 @@
 
         setStatus("Preparing PDF...");
         pdfBytes = base64ToUint8Array(response.base64);
+
+        if (pdfBytes.byteLength !== response.size) {
+          throw new Error(
+            "The received PDF size does not match the expected file size."
+          );
+        }
 
         const loadingTask = pdfjsLib.getDocument({ data: pdfBytes });
         pdfDocument = await loadingTask.promise;
