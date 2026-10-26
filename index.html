@@ -1,13 +1,10 @@
-
 <!DOCTYPE html>
 <html lang="en">
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Private PDF Viewer</title>
-
   <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
-
   <style>
     :root {
       color-scheme: light;
@@ -18,18 +15,13 @@
       --border: #dadce0;
       --accent: #1a73e8;
     }
-
-    * {
-      box-sizing: border-box;
-    }
-
+    * { box-sizing: border-box; }
     body {
       margin: 0;
       font-family: Arial, Helvetica, sans-serif;
       color: var(--text);
       background: var(--background);
     }
-
     #toolbar {
       position: sticky;
       top: 0;
@@ -45,9 +37,7 @@
       border-bottom: 1px solid var(--border);
       box-shadow: 0 1px 3px rgba(0, 0, 0, 0.08);
     }
-
-    button,
-    select {
+    button, select {
       min-height: 34px;
       padding: 6px 11px;
       border: 1px solid var(--border);
@@ -57,17 +47,8 @@
       font-size: 13px;
       cursor: pointer;
     }
-
-    button:hover,
-    select:hover {
-      background: #f1f3f4;
-    }
-
-    button:disabled {
-      opacity: 0.45;
-      cursor: not-allowed;
-    }
-
+    button:hover, select:hover { background: #f1f3f4; }
+    button:disabled { opacity: 0.45; cursor: not-allowed; }
     #status {
       width: 100%;
       text-align: center;
@@ -75,7 +56,6 @@
       color: #5f6368;
       overflow-wrap: anywhere;
     }
-
     #viewer {
       display: flex;
       flex-direction: column;
@@ -83,14 +63,12 @@
       gap: 18px;
       padding: 18px 12px 30px;
     }
-
     .pdf-page {
       display: flex;
       justify-content: center;
       width: 100%;
       margin: 0;
     }
-
     .pdf-page canvas {
       display: block;
       max-width: 100%;
@@ -98,7 +76,6 @@
       background: white;
       box-shadow: 0 2px 8px rgba(0, 0, 0, 0.18);
     }
-
     #message {
       max-width: 700px;
       margin: 60px auto;
@@ -107,40 +84,22 @@
       line-height: 1.6;
       overflow-wrap: anywhere;
     }
-
-    #message.error {
-      color: #b3261e;
-    }
-
+    #message.error { color: #b3261e; }
     @media (max-width: 600px) {
-      #toolbar {
-        gap: 6px;
-        padding: 8px;
-      }
-
-      button,
-      select {
-        padding: 6px 8px;
-      }
-
-      #viewer {
-        gap: 12px;
-        padding: 12px 0 20px;
-      }
-
+      #toolbar { gap: 6px; padding: 8px; }
+      button, select { padding: 6px 8px; }
+      #viewer { gap: 12px; padding: 12px 0 20px; }
       .pdf-page canvas {
         box-shadow: 0 1px 5px rgba(0, 0, 0, 0.14);
       }
     }
   </style>
 </head>
-
 <body>
   <div id="toolbar">
     <button id="fitWidthBtn" type="button">Fit to Width</button>
     <button id="fitPageBtn" type="button">Fit Page</button>
     <button id="zoomOutBtn" type="button" aria-label="Zoom out">−</button>
-
     <select id="zoomSelect" aria-label="Zoom level">
       <option value="auto">Automatic</option>
       <option value="fit-width">Fit to Width</option>
@@ -151,9 +110,7 @@
       <option value="1.5">150%</option>
       <option value="2">200%</option>
     </select>
-
     <button id="zoomInBtn" type="button" aria-label="Zoom in">+</button>
-
     <div id="status" role="status" aria-live="polite">
       Initializing private PDF viewer...
     </div>
@@ -165,7 +122,6 @@
   <script>
     "use strict";
 
-    // Replace this placeholder with your deployed Apps Script Web App URL.
     const APPS_SCRIPT_URL =
       "https://script.google.com/macros/s/AKfycbxcGZAFyuDZunSFnsAAAF4hdxTrMWIZyqBJ437EAB5hkx754Iq0MIlhguxplB_uxeDnwg/exec";
 
@@ -173,8 +129,7 @@
       CALLBACK_NAME: "pdfViewerReceivePdf",
       REQUEST_TIMEOUT_MS: 30000,
       MAX_DEVICE_SCALE: 2,
-      PAGE_GAP: 18,
-      RENDER_GAP: 0.05
+      MAX_ACCEPTED_PDF_BYTES: 2 * 1024 * 1024
     });
 
     pdfjsLib.GlobalWorkerOptions.workerSrc =
@@ -216,12 +171,20 @@
       elements.message.classList.remove("error");
     }
 
-    function getTokenFromFragment() {
+    function getFragmentParams() {
       const fragment = window.location.hash.startsWith("#")
         ? window.location.hash.slice(1)
         : window.location.hash;
 
-      return new URLSearchParams(fragment).get("token") || "";
+      return new URLSearchParams(fragment);
+    }
+
+    function getTokenFromFragment() {
+      return getFragmentParams().get("token") || "";
+    }
+
+    function getFileIdFromFragment() {
+      return getFragmentParams().get("fileId") || "";
     }
 
     function validateConfiguration() {
@@ -230,13 +193,21 @@
         !APPS_SCRIPT_URL.endsWith("/exec")
       ) {
         throw new Error(
-          "Apps Script URL belum dikonfigurasi. Edit index.html dan masukkan URL Web App yang berakhiran /exec."
+          "The Apps Script Web App URL is invalid. Check the URL in index.html."
         );
       }
 
       if (!getTokenFromFragment()) {
         throw new Error(
-          "Access token tidak ditemukan. Buka viewer menggunakan tautan privat yang memiliki #token=..."
+          "Access token is missing. Open the private viewer link provided to you."
+        );
+      }
+
+      const fileId = getFileIdFromFragment();
+
+      if (!fileId || !/^[a-zA-Z0-9_-]{10,200}$/.test(fileId)) {
+        throw new Error(
+          "PDF file ID is missing or invalid. Open the viewer using the complete report link."
         );
       }
     }
@@ -264,30 +235,50 @@
         cleanupRequest();
 
         const token = getTokenFromFragment();
+        const fileId = getFileIdFromFragment();
         const url = new URL(APPS_SCRIPT_URL);
 
         url.searchParams.set("action", "pdf");
         url.searchParams.set("token", token);
+        url.searchParams.set("fileId", fileId);
         url.searchParams.set("callback", CONFIG.CALLBACK_NAME);
 
-        window[CONFIG.CALLBACK_NAME] = (response) => {
-          cleanupRequest();
+        let settled = false;
 
+        function finish(callback, value) {
+          if (settled) return;
+          settled = true;
+          cleanupRequest();
+          callback(value);
+        }
+
+        window[CONFIG.CALLBACK_NAME] = (response) => {
           if (!response || response.ok !== true) {
-            reject(new Error(
+            finish(reject, new Error(
               response && response.error
                 ? response.error
-                : "Apps Script did not return a valid PDF response."
+                : "The PDF service returned an invalid response."
             ));
             return;
           }
 
-          if (!response.base64) {
-            reject(new Error("PDF data is missing from the response."));
+          if (typeof response.base64 !== "string" || !response.base64) {
+            finish(reject, new Error("PDF data is missing from the response."));
             return;
           }
 
-          resolve(response);
+          if (
+            !Number.isFinite(response.size) ||
+            response.size < 1 ||
+            response.size > CONFIG.MAX_ACCEPTED_PDF_BYTES
+          ) {
+            finish(reject, new Error(
+              "The PDF is empty or exceeds the current 2 MB viewer limit."
+            ));
+            return;
+          }
+
+          finish(resolve, response);
         };
 
         requestScript = document.createElement("script");
@@ -295,16 +286,14 @@
         requestScript.async = true;
 
         requestScript.onerror = () => {
-          cleanupRequest();
-          reject(new Error(
-            "Could not connect to the PDF service. Check the Apps Script deployment URL and access settings."
+          finish(reject, new Error(
+            "Could not connect to the PDF service. Check the deployment URL and access settings."
           ));
         };
 
         requestTimer = setTimeout(() => {
-          cleanupRequest();
-          reject(new Error(
-            "The PDF request timed out. Please reload and try again."
+          finish(reject, new Error(
+            "The PDF request timed out. The file may be too large or the service may be unavailable."
           ));
         }, CONFIG.REQUEST_TIMEOUT_MS);
 
@@ -325,7 +314,6 @@
 
     function getPageScale(page) {
       const baseViewport = page.getViewport({ scale: 1 });
-
       const availableWidth = Math.max(
         200,
         elements.viewer.clientWidth - 24
@@ -366,9 +354,7 @@
         for (let pageNumber = 1; pageNumber <= totalPages; pageNumber++) {
           if (thisRender !== renderVersion) return;
 
-          setStatus(
-            `Rendering page ${pageNumber} of ${totalPages}...`
-          );
+          setStatus(`Rendering page ${pageNumber} of ${totalPages}...`);
 
           const page = await pdfDocument.getPage(pageNumber);
 
@@ -376,8 +362,8 @@
 
           const scale = getPageScale(page);
           const viewport = page.getViewport({ scale });
-
           const pageContainer = document.createElement("section");
+
           pageContainer.className = "pdf-page";
           pageContainer.setAttribute(
             "aria-label",
@@ -385,10 +371,7 @@
           );
 
           const canvas = document.createElement("canvas");
-          const context = canvas.getContext("2d", {
-            alpha: false
-          });
-
+          const context = canvas.getContext("2d", { alpha: false });
           const deviceScale = Math.min(
             window.devicePixelRatio || 1,
             CONFIG.MAX_DEVICE_SCALE
@@ -396,7 +379,6 @@
 
           canvas.width = Math.ceil(viewport.width * deviceScale);
           canvas.height = Math.ceil(viewport.height * deviceScale);
-
           canvas.style.width = `${Math.floor(viewport.width)}px`;
           canvas.style.height = `${Math.floor(viewport.height)}px`;
 
@@ -405,7 +387,7 @@
 
           await page.render({
             canvasContext: context,
-            viewport: viewport,
+            viewport,
             transform: deviceScale === 1
               ? null
               : [deviceScale, 0, 0, deviceScale, 0, 0],
@@ -443,11 +425,7 @@
     }
 
     function changeManualScale(delta) {
-      let current = manualScale;
-
-      if (currentScaleMode !== "manual") {
-        current = 1;
-      }
+      const current = currentScaleMode === "manual" ? manualScale : 1;
 
       manualScale = Math.min(3, Math.max(0.4, current + delta));
       currentScaleMode = "manual";
@@ -508,9 +486,7 @@
       if (currentScaleMode === "manual" || !pdfDocument) return;
 
       clearTimeout(resizeTimer);
-      resizeTimer = setTimeout(() => {
-        renderAllPages();
-      }, 180);
+      resizeTimer = setTimeout(renderAllPages, 180);
     });
 
     async function initializeViewer() {
@@ -523,13 +499,9 @@
         const response = await requestPrivatePdf();
 
         setStatus("Preparing PDF...");
-
         pdfBytes = base64ToUint8Array(response.base64);
 
-        const loadingTask = pdfjsLib.getDocument({
-          data: pdfBytes
-        });
-
+        const loadingTask = pdfjsLib.getDocument({ data: pdfBytes });
         pdfDocument = await loadingTask.promise;
 
         document.title = response.filename || "Private PDF Viewer";
