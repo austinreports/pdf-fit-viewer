@@ -1,413 +1,556 @@
-<!doctype html>
+
+<!DOCTYPE html>
 <html lang="en">
 <head>
-<meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Austin Weekly Intelligence Report</title>
-<style>
-:root{color-scheme:light;--bg:#f3f5f7;--panel:#fff;--ink:#202124;--line:#d9dee5}
-*{box-sizing:border-box}
-html,body{margin:0;min-height:100%;font-family:Arial,Helvetica,sans-serif;color:var(--ink);background:var(--bg)}
-.toolbar{position:sticky;top:0;z-index:5;display:flex;align-items:center;gap:8px;flex-wrap:wrap;padding:10px 14px;background:var(--panel);border-bottom:1px solid var(--line);box-shadow:0 1px 4px #0000000d}
-.brand{font-size:14px;font-weight:700;margin-right:auto}
-button,select{min-height:34px;padding:6px 10px;border:1px solid var(--line);border-radius:6px;background:#fff;color:var(--ink);font-size:13px;cursor:pointer}
-button:disabled{opacity:.45;cursor:default}
-#status{width:100%;font-size:12px;color:#5f6368}
-#error{display:none;margin:16px auto;max-width:760px;padding:14px;background:#fff4f2;color:#8a1c0d;border:1px solid #f2c5bd;border-radius:8px;line-height:1.5;overflow-wrap:anywhere}
-#viewer{padding:16px 10px 28px}
-.page{margin:0 auto 16px;background:#fff;box-shadow:0 2px 12px #00000018;overflow:hidden}
-canvas{display:block;width:100%;height:auto}
-@media(max-width:520px){.toolbar{gap:6px;padding:8px}.brand{width:100%}#viewer{padding:10px 4px 20px}}
-</style>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Private PDF Viewer</title>
+
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
+
+  <style>
+    :root {
+      color-scheme: light;
+      --toolbar-height: 58px;
+      --background: #e8ebef;
+      --toolbar: #ffffff;
+      --text: #202124;
+      --border: #dadce0;
+      --accent: #1a73e8;
+    }
+
+    * {
+      box-sizing: border-box;
+    }
+
+    body {
+      margin: 0;
+      font-family: Arial, Helvetica, sans-serif;
+      color: var(--text);
+      background: var(--background);
+    }
+
+    #toolbar {
+      position: sticky;
+      top: 0;
+      z-index: 10;
+      min-height: var(--toolbar-height);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      flex-wrap: wrap;
+      gap: 8px;
+      padding: 9px 12px;
+      background: var(--toolbar);
+      border-bottom: 1px solid var(--border);
+      box-shadow: 0 1px 3px rgba(0, 0, 0, 0.08);
+    }
+
+    button,
+    select {
+      min-height: 34px;
+      padding: 6px 11px;
+      border: 1px solid var(--border);
+      border-radius: 5px;
+      background: #fff;
+      color: var(--text);
+      font-size: 13px;
+      cursor: pointer;
+    }
+
+    button:hover,
+    select:hover {
+      background: #f1f3f4;
+    }
+
+    button:disabled {
+      opacity: 0.45;
+      cursor: not-allowed;
+    }
+
+    #status {
+      width: 100%;
+      text-align: center;
+      font-size: 12px;
+      color: #5f6368;
+      overflow-wrap: anywhere;
+    }
+
+    #viewer {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 18px;
+      padding: 18px 12px 30px;
+    }
+
+    .pdf-page {
+      display: flex;
+      justify-content: center;
+      width: 100%;
+      margin: 0;
+    }
+
+    .pdf-page canvas {
+      display: block;
+      max-width: 100%;
+      height: auto;
+      background: white;
+      box-shadow: 0 2px 8px rgba(0, 0, 0, 0.18);
+    }
+
+    #message {
+      max-width: 700px;
+      margin: 60px auto;
+      padding: 24px;
+      text-align: center;
+      line-height: 1.6;
+      overflow-wrap: anywhere;
+    }
+
+    #message.error {
+      color: #b3261e;
+    }
+
+    @media (max-width: 600px) {
+      #toolbar {
+        gap: 6px;
+        padding: 8px;
+      }
+
+      button,
+      select {
+        padding: 6px 8px;
+      }
+
+      #viewer {
+        gap: 12px;
+        padding: 12px 0 20px;
+      }
+
+      .pdf-page canvas {
+        box-shadow: 0 1px 5px rgba(0, 0, 0, 0.14);
+      }
+    }
+  </style>
 </head>
+
 <body>
-<header class="toolbar">
-<div class="brand">Austin Weekly Intelligence Report</div>
-<button id="fitWidth" type="button">Fit to Width</button>
-<button id="fitPage" type="button">Fit Page</button>
-<button id="zoomOut" type="button" aria-label="Zoom out">−</button>
-<select id="zoomSelect" aria-label="Zoom level">
-<option value="page-width" selected>Fit to Width</option>
-<option value="page-fit">Fit Page</option>
-<option value="0.75">75%</option>
-<option value="1">100%</option>
-<option value="1.25">125%</option>
-<option value="1.5">150%</option>
-</select>
-<button id="zoomIn" type="button" aria-label="Zoom in">+</button>
-<button id="prevPage" type="button" disabled>Previous</button>
-<span id="pageInfo">Page — / —</span>
-<button id="nextPage" type="button" disabled>Next</button>
-<div id="status">Preparing secure PDF request…</div>
-</header>
-
-<div id="error" role="alert"></div>
-<main id="viewer"></main>
-
-<script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
-<script>
-"use strict";
-
-/*
- * Private PDF viewer.
- * The PDF stays Restricted in Google Drive.
- * Do not put the access token in this source file.
- *
- * Configure APPS_SCRIPT_URL with your deployed Apps Script /exec URL.
- * Open this viewer with #token=YOUR_TOKEN.
- */
-
-const APPS_SCRIPT_URL = "https://script.google.com/macros/s/AKfycbxcGZAFyuDZunSFnsAAAF4hdxTrMWIZyqBJ437EAB5hkx754Iq0MIlhguxplB_uxeDnwg/exec";
-const JSONP_CALLBACK = "pdfViewerReceivePdf";
-const REQUEST_TIMEOUT_MS = 30000;
-
-const pdfjsLib = window["pdfjs-dist/build/pdf"];
-
-const viewer = document.getElementById("viewer");
-const statusEl = document.getElementById("status");
-const errorEl = document.getElementById("error");
-const pageInfo = document.getElementById("pageInfo");
-const zoomSelect = document.getElementById("zoomSelect");
-const prevButton = document.getElementById("prevPage");
-const nextButton = document.getElementById("nextPage");
-
-let pdfDoc = null;
-let currentPage = 1;
-let zoomMode = "page-width";
-let renderToken = 0;
-let requestTimer = null;
-let requestScript = null;
-
-if (pdfjsLib) {
-  pdfjsLib.GlobalWorkerOptions.workerSrc =
-    "https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js";
-}
-
-function showError(message) {
-  errorEl.textContent = message;
-  errorEl.style.display = "block";
-  statusEl.textContent = "Unable to load PDF";
-  viewer.replaceChildren();
-  prevButton.disabled = true;
-  nextButton.disabled = true;
-}
-
-function clearRequest() {
-  if (requestTimer) {
-    clearTimeout(requestTimer);
-    requestTimer = null;
-  }
-
-  if (requestScript) {
-    requestScript.remove();
-    requestScript = null;
-  }
-
-  delete window[JSONP_CALLBACK];
-}
-
-function getTokenFromFragment() {
-  const fragment = location.hash.startsWith("#")
-    ? location.hash.slice(1)
-    : location.hash;
-
-  const params = new URLSearchParams(fragment);
-  return params.get("token") || "";
-}
-
-function requestPrivatePdf() {
-  return new Promise((resolve, reject) => {
-    const token = getTokenFromFragment();
-
-    if (!token) {
-      reject(new Error(
-        "Access token is missing. Open the viewer using #token=YOUR_TOKEN."
-      ));
-      return;
-    }
-
-    if (
-      !APPS_SCRIPT_URL.startsWith("https://script.google.com/") ||
-      !APPS_SCRIPT_URL.includes("/macros/s/") ||
-      !APPS_SCRIPT_URL.endsWith("/exec")
-    ) {
-      reject(new Error(
-        "Configure APPS_SCRIPT_URL with your deployed Apps Script Web App /exec URL."
-      ));
-      return;
-    }
-
-    clearRequest();
-
-    let settled = false;
-
-    function finish(callback, value) {
-      if (settled) return;
-      settled = true;
-      clearRequest();
-      callback(value);
-    }
-
-    window[JSONP_CALLBACK] = function (response) {
-      if (!response || response.ok !== true) {
-        finish(
-          reject,
-          new Error(
-            response && response.error
-              ? response.error
-              : "The PDF service returned an invalid response."
-          )
-        );
-        return;
-      }
-
-      if (
-        typeof response.base64 !== "string" ||
-        response.contentType !== "application/pdf"
-      ) {
-        finish(reject, new Error(
-          "The PDF service did not return valid PDF data."
-        ));
-        return;
-      }
-
-      finish(resolve, response);
-    };
-
-    const url = new URL(APPS_SCRIPT_URL);
-    url.searchParams.set("action", "pdf");
-    url.searchParams.set("token", token);
-    url.searchParams.set("callback", JSONP_CALLBACK);
-
-    requestScript = document.createElement("script");
-    requestScript.src = url.toString();
-    requestScript.async = true;
-
-    requestScript.onerror = function () {
-      finish(reject, new Error(
-        "Could not contact the PDF service. Check the Web App deployment and internet connection."
-      ));
-    };
-
-    requestTimer = setTimeout(() => {
-      finish(reject, new Error(
-        "The PDF request timed out. Please try again."
-      ));
-    }, REQUEST_TIMEOUT_MS);
-
-    document.head.appendChild(requestScript);
-  });
-}
-
-function base64ToUint8Array(base64) {
-  const binary = atob(base64);
-  const bytes = new Uint8Array(binary.length);
-
-  for (let i = 0; i < binary.length; i++) {
-    bytes[i] = binary.charCodeAt(i);
-  }
-
-  return bytes;
-}
-
-function getScale(page) {
-  const viewport = page.getViewport({scale: 1});
-  const width = Math.max(280, viewer.clientWidth - 20);
-  const height = Math.max(300, innerHeight - 150);
-
-  if (zoomMode === "page-width") {
-    return width / viewport.width;
-  }
-
-  if (zoomMode === "page-fit") {
-    return Math.min(width / viewport.width, height / viewport.height);
-  }
-
-  const scale = Number(zoomMode);
-  return Number.isFinite(scale) && scale > 0 ? scale : 1;
-}
-
-async function renderPage(pageNumber) {
-  if (!pdfDoc) return;
-
-  const token = ++renderToken;
-  currentPage = Math.min(
-    Math.max(1, pageNumber),
-    pdfDoc.numPages
-  );
-
-  const page = await pdfDoc.getPage(currentPage);
-  if (token !== renderToken) return;
-
-  const scale = getScale(page);
-  const viewport = page.getViewport({scale});
-  const outputScale = Math.min(window.devicePixelRatio || 1, 2);
-
-  const wrapper = document.createElement("section");
-  wrapper.className = "page";
-  wrapper.style.width = Math.floor(viewport.width) + "px";
-
-  const canvas = document.createElement("canvas");
-  const context = canvas.getContext("2d", {alpha: false});
-
-  canvas.width = Math.floor(viewport.width * outputScale);
-  canvas.height = Math.floor(viewport.height * outputScale);
-  canvas.style.width = Math.floor(viewport.width) + "px";
-  canvas.style.height = Math.floor(viewport.height) + "px";
-
-  wrapper.appendChild(canvas);
-  viewer.replaceChildren(wrapper);
-
-  try {
-    await page.render({
-      canvasContext: context,
-      viewport,
-      transform: outputScale !== 1
-        ? [outputScale, 0, 0, outputScale, 0, 0]
-        : null
-    }).promise;
-  } catch (error) {
-    if (token !== renderToken) return;
-    throw error;
-  }
-
-  if (token !== renderToken) return;
-
-  pageInfo.textContent =
-    "Page " + currentPage + " / " + pdfDoc.numPages;
-
-  prevButton.disabled = currentPage <= 1;
-  nextButton.disabled = currentPage >= pdfDoc.numPages;
-
-  statusEl.textContent =
-    zoomMode === "page-width"
-      ? "Fit to Width"
-      : zoomMode === "page-fit"
-        ? "Fit Page"
-        : Math.round(Number(zoomMode) * 100) + "%";
-}
-
-async function loadPdf() {
-  if (!pdfjsLib) {
-    showError(
-      "PDF.js failed to load. Check your internet connection or CDN availability."
-    );
-    return;
-  }
-
-  try {
-    statusEl.textContent = "Requesting private PDF…";
-
-    const response = await requestPrivatePdf();
-
-    statusEl.textContent = "Preparing PDF…";
-
-    const bytes = base64ToUint8Array(response.base64);
-
-    pdfDoc = await pdfjsLib.getDocument({
-      data: bytes
-    }).promise;
-
-    zoomMode = "page-width";
-    zoomSelect.value = zoomMode;
-
-    await renderPage(1);
-
-    statusEl.textContent =
-      response.filename + " — " + pdfDoc.numPages + " page(s) loaded";
-  } catch (error) {
-    console.error("Private PDF viewer error:", error);
-
-    showError(
-      error && error.message
-        ? error.message
-        : "Unable to load the PDF."
-    );
-  }
-}
-
-document.getElementById("fitWidth").addEventListener("click", () => {
-  zoomMode = "page-width";
-  zoomSelect.value = zoomMode;
-  renderPage(currentPage).catch(error => {
-    console.error(error);
-    showError("Could not render the PDF page.");
-  });
-});
-
-document.getElementById("fitPage").addEventListener("click", () => {
-  zoomMode = "page-fit";
-  zoomSelect.value = zoomMode;
-  renderPage(currentPage).catch(error => {
-    console.error(error);
-    showError("Could not render the PDF page.");
-  });
-});
-
-document.getElementById("zoomOut").addEventListener("click", () => {
-  const current = zoomMode === "page-width" || zoomMode === "page-fit"
-    ? 1
-    : Number(zoomMode);
-
-  zoomMode = String(Math.max(0.5, current - 0.1));
-  zoomSelect.value = zoomMode;
-
-  renderPage(currentPage).catch(error => {
-    console.error(error);
-    showError("Could not render the PDF page.");
-  });
-});
-
-document.getElementById("zoomIn").addEventListener("click", () => {
-  const current = zoomMode === "page-width" || zoomMode === "page-fit"
-    ? 1
-    : Number(zoomMode);
-
-  zoomMode = String(Math.min(2.5, current + 0.1));
-  zoomSelect.value = zoomMode;
-
-  renderPage(currentPage).catch(error => {
-    console.error(error);
-    showError("Could not render the PDF page.");
-  });
-});
-
-zoomSelect.addEventListener("change", () => {
-  zoomMode = zoomSelect.value;
-
-  renderPage(currentPage).catch(error => {
-    console.error(error);
-    showError("Could not render the PDF page.");
-  });
-});
-
-prevButton.addEventListener("click", () => {
-  renderPage(currentPage - 1).catch(error => {
-    console.error(error);
-    showError("Could not render the PDF page.");
-  });
-});
-
-nextButton.addEventListener("click", () => {
-  renderPage(currentPage + 1).catch(error => {
-    console.error(error);
-    showError("Could not render the PDF page.");
-  });
-});
-
-window.addEventListener("resize", () => {
-  if (pdfDoc && (
-    zoomMode === "page-width" ||
-    zoomMode === "page-fit"
-  )) {
-    renderPage(currentPage).catch(error => {
-      console.error(error);
-      showError("Could not render the PDF page.");
+  <div id="toolbar">
+    <button id="fitWidthBtn" type="button">Fit to Width</button>
+    <button id="fitPageBtn" type="button">Fit Page</button>
+    <button id="zoomOutBtn" type="button" aria-label="Zoom out">−</button>
+
+    <select id="zoomSelect" aria-label="Zoom level">
+      <option value="auto">Automatic</option>
+      <option value="fit-width">Fit to Width</option>
+      <option value="fit-page">Fit Page</option>
+      <option value="0.75">75%</option>
+      <option value="1">100%</option>
+      <option value="1.25">125%</option>
+      <option value="1.5">150%</option>
+      <option value="2">200%</option>
+    </select>
+
+    <button id="zoomInBtn" type="button" aria-label="Zoom in">+</button>
+
+    <div id="status" role="status" aria-live="polite">
+      Initializing private PDF viewer...
+    </div>
+  </div>
+
+  <div id="message">Loading PDF...</div>
+  <main id="viewer" aria-label="PDF document" hidden></main>
+
+  <script>
+    "use strict";
+
+    // Replace this placeholder with your deployed Apps Script Web App URL.
+    const APPS_SCRIPT_URL =
+      "https://script.google.com/macros/s/AKfycbxcGZAFyuDZunSFnsAAAF4hdxTrMWIZyqBJ437EAB5hkx754Iq0MIlhguxplB_uxeDnwg/exec";
+
+    const CONFIG = Object.freeze({
+      CALLBACK_NAME: "pdfViewerReceivePdf",
+      REQUEST_TIMEOUT_MS: 30000,
+      MAX_DEVICE_SCALE: 2,
+      PAGE_GAP: 18,
+      RENDER_GAP: 0.05
     });
-  }
-});
 
-loadPdf();
-</script>
+    pdfjsLib.GlobalWorkerOptions.workerSrc =
+      "https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js";
+
+    const elements = {
+      toolbar: document.getElementById("toolbar"),
+      viewer: document.getElementById("viewer"),
+      message: document.getElementById("message"),
+      status: document.getElementById("status"),
+      fitWidth: document.getElementById("fitWidthBtn"),
+      fitPage: document.getElementById("fitPageBtn"),
+      zoomOut: document.getElementById("zoomOutBtn"),
+      zoomIn: document.getElementById("zoomInBtn"),
+      zoomSelect: document.getElementById("zoomSelect")
+    };
+
+    let pdfDocument = null;
+    let currentScaleMode = "fit-width";
+    let manualScale = 1;
+    let renderVersion = 0;
+    let resizeTimer = null;
+    let requestTimer = null;
+    let requestScript = null;
+    let pdfBytes = null;
+
+    function setStatus(text) {
+      elements.status.textContent = text;
+    }
+
+    function showMessage(text, isError = false) {
+      elements.message.hidden = false;
+      elements.message.classList.toggle("error", isError);
+      elements.message.textContent = text;
+    }
+
+    function hideMessage() {
+      elements.message.hidden = true;
+      elements.message.classList.remove("error");
+    }
+
+    function getTokenFromFragment() {
+      const fragment = window.location.hash.startsWith("#")
+        ? window.location.hash.slice(1)
+        : window.location.hash;
+
+      return new URLSearchParams(fragment).get("token") || "";
+    }
+
+    function validateConfiguration() {
+      if (
+        !APPS_SCRIPT_URL.startsWith("https://script.google.com/") ||
+        !APPS_SCRIPT_URL.endsWith("/exec")
+      ) {
+        throw new Error(
+          "Apps Script URL belum dikonfigurasi. Edit index.html dan masukkan URL Web App yang berakhiran /exec."
+        );
+      }
+
+      if (!getTokenFromFragment()) {
+        throw new Error(
+          "Access token tidak ditemukan. Buka viewer menggunakan tautan privat yang memiliki #token=..."
+        );
+      }
+    }
+
+    function cleanupRequest() {
+      if (requestTimer) {
+        clearTimeout(requestTimer);
+        requestTimer = null;
+      }
+
+      if (requestScript) {
+        requestScript.remove();
+        requestScript = null;
+      }
+
+      try {
+        delete window[CONFIG.CALLBACK_NAME];
+      } catch (_) {
+        window[CONFIG.CALLBACK_NAME] = undefined;
+      }
+    }
+
+    function requestPrivatePdf() {
+      return new Promise((resolve, reject) => {
+        cleanupRequest();
+
+        const token = getTokenFromFragment();
+        const url = new URL(APPS_SCRIPT_URL);
+
+        url.searchParams.set("action", "pdf");
+        url.searchParams.set("token", token);
+        url.searchParams.set("callback", CONFIG.CALLBACK_NAME);
+
+        window[CONFIG.CALLBACK_NAME] = (response) => {
+          cleanupRequest();
+
+          if (!response || response.ok !== true) {
+            reject(new Error(
+              response && response.error
+                ? response.error
+                : "Apps Script did not return a valid PDF response."
+            ));
+            return;
+          }
+
+          if (!response.base64) {
+            reject(new Error("PDF data is missing from the response."));
+            return;
+          }
+
+          resolve(response);
+        };
+
+        requestScript = document.createElement("script");
+        requestScript.src = url.toString();
+        requestScript.async = true;
+
+        requestScript.onerror = () => {
+          cleanupRequest();
+          reject(new Error(
+            "Could not connect to the PDF service. Check the Apps Script deployment URL and access settings."
+          ));
+        };
+
+        requestTimer = setTimeout(() => {
+          cleanupRequest();
+          reject(new Error(
+            "The PDF request timed out. Please reload and try again."
+          ));
+        }, CONFIG.REQUEST_TIMEOUT_MS);
+
+        document.head.appendChild(requestScript);
+      });
+    }
+
+    function base64ToUint8Array(base64) {
+      const binary = atob(base64);
+      const bytes = new Uint8Array(binary.length);
+
+      for (let i = 0; i < binary.length; i++) {
+        bytes[i] = binary.charCodeAt(i);
+      }
+
+      return bytes;
+    }
+
+    function getPageScale(page) {
+      const baseViewport = page.getViewport({ scale: 1 });
+
+      const availableWidth = Math.max(
+        200,
+        elements.viewer.clientWidth - 24
+      );
+
+      if (currentScaleMode === "manual") {
+        return manualScale;
+      }
+
+      const widthScale = availableWidth / baseViewport.width;
+
+      if (currentScaleMode === "fit-page") {
+        const availableHeight = Math.max(
+          200,
+          window.innerHeight - elements.toolbar.offsetHeight - 30
+        );
+
+        return Math.min(
+          widthScale,
+          availableHeight / baseViewport.height
+        );
+      }
+
+      return widthScale;
+    }
+
+    async function renderAllPages() {
+      if (!pdfDocument) return;
+
+      const thisRender = ++renderVersion;
+      elements.viewer.replaceChildren();
+      elements.viewer.hidden = false;
+      hideMessage();
+
+      const totalPages = pdfDocument.numPages;
+
+      try {
+        for (let pageNumber = 1; pageNumber <= totalPages; pageNumber++) {
+          if (thisRender !== renderVersion) return;
+
+          setStatus(
+            `Rendering page ${pageNumber} of ${totalPages}...`
+          );
+
+          const page = await pdfDocument.getPage(pageNumber);
+
+          if (thisRender !== renderVersion) return;
+
+          const scale = getPageScale(page);
+          const viewport = page.getViewport({ scale });
+
+          const pageContainer = document.createElement("section");
+          pageContainer.className = "pdf-page";
+          pageContainer.setAttribute(
+            "aria-label",
+            `Page ${pageNumber} of ${totalPages}`
+          );
+
+          const canvas = document.createElement("canvas");
+          const context = canvas.getContext("2d", {
+            alpha: false
+          });
+
+          const deviceScale = Math.min(
+            window.devicePixelRatio || 1,
+            CONFIG.MAX_DEVICE_SCALE
+          );
+
+          canvas.width = Math.ceil(viewport.width * deviceScale);
+          canvas.height = Math.ceil(viewport.height * deviceScale);
+
+          canvas.style.width = `${Math.floor(viewport.width)}px`;
+          canvas.style.height = `${Math.floor(viewport.height)}px`;
+
+          pageContainer.appendChild(canvas);
+          elements.viewer.appendChild(pageContainer);
+
+          await page.render({
+            canvasContext: context,
+            viewport: viewport,
+            transform: deviceScale === 1
+              ? null
+              : [deviceScale, 0, 0, deviceScale, 0, 0],
+            background: "rgb(255,255,255)"
+          }).promise;
+
+          if (thisRender !== renderVersion) return;
+        }
+
+        setStatus(
+          `${totalPages} page${totalPages === 1 ? "" : "s"} loaded`
+        );
+      } catch (error) {
+        if (thisRender !== renderVersion) return;
+
+        console.error("PDF rendering error:", error);
+        setStatus("Unable to render PDF.");
+        showMessage(
+          "An error occurred while displaying the PDF. Reload the page and try again.",
+          true
+        );
+      }
+    }
+
+    function setScaleMode(mode) {
+      currentScaleMode = mode;
+
+      if (mode === "fit-width") {
+        elements.zoomSelect.value = "fit-width";
+      } else if (mode === "fit-page") {
+        elements.zoomSelect.value = "fit-page";
+      }
+
+      renderAllPages();
+    }
+
+    function changeManualScale(delta) {
+      let current = manualScale;
+
+      if (currentScaleMode !== "manual") {
+        current = 1;
+      }
+
+      manualScale = Math.min(3, Math.max(0.4, current + delta));
+      currentScaleMode = "manual";
+
+      const matchingOption = Array.from(
+        elements.zoomSelect.options
+      ).find(option => {
+        const value = Number(option.value);
+        return option.value !== "auto" &&
+          option.value !== "fit-width" &&
+          option.value !== "fit-page" &&
+          Number.isFinite(value) &&
+          Math.abs(value - manualScale) < 0.001;
+      });
+
+      elements.zoomSelect.value = matchingOption
+        ? matchingOption.value
+        : "auto";
+
+      renderAllPages();
+    }
+
+    elements.fitWidth.addEventListener("click", () => {
+      setScaleMode("fit-width");
+    });
+
+    elements.fitPage.addEventListener("click", () => {
+      setScaleMode("fit-page");
+    });
+
+    elements.zoomOut.addEventListener("click", () => {
+      changeManualScale(-0.1);
+    });
+
+    elements.zoomIn.addEventListener("click", () => {
+      changeManualScale(0.1);
+    });
+
+    elements.zoomSelect.addEventListener("change", () => {
+      const value = elements.zoomSelect.value;
+
+      if (value === "fit-width" || value === "auto") {
+        setScaleMode("fit-width");
+      } else if (value === "fit-page") {
+        setScaleMode("fit-page");
+      } else {
+        const numericValue = Number(value);
+
+        if (Number.isFinite(numericValue)) {
+          manualScale = numericValue;
+          currentScaleMode = "manual";
+          renderAllPages();
+        }
+      }
+    });
+
+    window.addEventListener("resize", () => {
+      if (currentScaleMode === "manual" || !pdfDocument) return;
+
+      clearTimeout(resizeTimer);
+      resizeTimer = setTimeout(() => {
+        renderAllPages();
+      }, 180);
+    });
+
+    async function initializeViewer() {
+      try {
+        validateConfiguration();
+
+        setStatus("Connecting to private PDF service...");
+        showMessage("Loading private PDF...");
+
+        const response = await requestPrivatePdf();
+
+        setStatus("Preparing PDF...");
+
+        pdfBytes = base64ToUint8Array(response.base64);
+
+        const loadingTask = pdfjsLib.getDocument({
+          data: pdfBytes
+        });
+
+        pdfDocument = await loadingTask.promise;
+
+        document.title = response.filename || "Private PDF Viewer";
+
+        setStatus("PDF loaded. Rendering all pages...");
+        await renderAllPages();
+      } catch (error) {
+        console.error("Viewer initialization error:", error);
+
+        elements.viewer.hidden = true;
+        setStatus("Unable to load PDF.");
+        showMessage(
+          error && error.message
+            ? error.message
+            : "Unable to load the PDF. Please check the private link.",
+          true
+        );
+      }
+    }
+
+    initializeViewer();
+  </script>
 </body>
 </html>
